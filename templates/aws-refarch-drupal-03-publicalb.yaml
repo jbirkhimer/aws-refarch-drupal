@@ -33,7 +33,7 @@ Metadata:
 Parameters:
 
   PublicAlbAcmCertificate:
-    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
+    AllowedPattern: ^$|(arn:aws-us-gov:acm:)([a-z0-9/:-])*([a-z0-9])$
     Description: '[ Optional ] The AWS Certification Manager certificate ARN for the ALB certificate - this certificate should be created in the region you wish to run the ALB and must reference the Drupal domain name you use below.'
     Type: String
   PublicAlbSecurityGroup:
@@ -60,13 +60,8 @@ Conditions:
     !Equals [ '', !Ref PublicAlbAcmCertificate ]
   MoreThan2AZ:
     !Or [
-      !Equals [ !Ref 'AWS::Region', us-east-1 ],
-      !Equals [ !Ref 'AWS::Region', us-east-2 ],
-      !Equals [ !Ref 'AWS::Region', us-west-2 ],
-      !Equals [ !Ref 'AWS::Region', eu-west-1 ],
-      !Equals [ !Ref 'AWS::Region', sa-east-1 ],
-      !Equals [ !Ref 'AWS::Region', ap-northeast-1 ],
-      !Equals [ !Ref 'AWS::Region', ap-southeast-2 ]
+      !Equals [ !Ref 'AWS::Region', us-gov-east-1 ],
+      !Equals [ !Ref 'AWS::Region', us-gov-west-1 ]
     ]
 
 Resources:

@@ -25,11 +25,11 @@ Parameters:
 
   DnsEndpoint:
     AllowedPattern: ^(?!http)(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$
-    Description: The DNS endpoint - CloudFront DNS if using CloudFront else Public ELB DNS name.
+    Description: The DNS endpoint - Public ELB DNS name.
     Type: String
   DnsHostId:
     AllowedPattern: ^[A-Z0-9]{14}$
-    Description: The DNS host zone id - 'Z2FDTNDATAQYW2' if using CloudFront else Public ELB host zone id.
+    Description: The DNS host zone id - Public ELB host zone id.
     Type: String
   DomainName:
     AllowedPattern: ^(?!http)(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$
@@ -43,7 +43,7 @@ Resources:
     Properties:
       HostedZoneName: !Join ['', [!Ref DomainName, '.']]
       RecordSets:
-      - Name: !Join ['', ['www.', !Ref DomainName, '.']]
+      - Name: !Join ['', ['', !Ref DomainName, '.']]
         Type: A
         AliasTarget:
           DNSName: !Ref DnsEndpoint

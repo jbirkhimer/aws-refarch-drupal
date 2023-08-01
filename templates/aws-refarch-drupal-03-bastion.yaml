@@ -48,46 +48,19 @@ Conditions:
 
   MoreThan2AZ:
     !Or [
-      !Equals [ !Ref 'AWS::Region', us-east-1 ],
-      !Equals [ !Ref 'AWS::Region', us-east-2 ],
-      !Equals [ !Ref 'AWS::Region', us-west-2 ],
-      !Equals [ !Ref 'AWS::Region', eu-west-1 ],
-      !Equals [ !Ref 'AWS::Region', sa-east-1 ],
-      !Equals [ !Ref 'AWS::Region', ap-northeast-1 ],
-      !Equals [ !Ref 'AWS::Region', ap-southeast-2 ]
+      !Equals [ !Ref 'AWS::Region', us-gov-east-1 ],
+      !Equals [ !Ref 'AWS::Region', us-gov-west-1 ]
     ]
 
 Mappings:
 
   RegionMap:
-    ap-northeast-1:
-      AMI: ami-56d4ad31
-    ap-northeast-2:
-      AMI: ami-dac312b4
-    ap-south-1:
-      AMI: ami-f9daac96
-    ap-southeast-1:
-      AMI: ami-dc9339bf
-    ap-southeast-2:
-      AMI: ami-1c47407f
-    ca-central-1:
-      AMI: ami-ebed508f
-    eu-central-1:
-      AMI: ami-af0fc0c0
-    eu-west-1:
-      AMI: ami-70edb016
-    eu-west-2:
-      AMI: ami-f1949e95
-    sa-east-1:
-      AMI: ami-80086dec
-    us-east-1:
-      AMI: ami-0b33d91d
-    us-east-2:
-      AMI: ami-c55673a0
-    us-west-1:
-      AMI: ami-165a0876
-    us-west-2:
-      AMI: ami-f173cc91
+    us-gov-west-1:
+      AMI: ami-0c7e9eda70bb1f75c
+#      CIS_STIG_RHEL9_AMI: ami-026382c84eef5afdf
+    us-gov-east-1:
+      AMI: ami-0cf1e2e4032ecd87c
+#      CIS_STIG_RHEL9_AMI: ami-00f2d27cdd4bf678b
 
 Resources:
 
@@ -99,7 +72,7 @@ Resources:
       HealthCheckType: EC2
       LaunchConfigurationName: !Ref BastionLaunchConfiguration
       MaxSize: 1
-      MinSize: 0
+      MinSize: 1
       Tags:
         - Key: Name
           Value: !Join [ '', [ 'Bastion / ', !Ref 'AWS::StackName' ] ]
@@ -116,7 +89,7 @@ Resources:
       IamInstanceProfile: !Ref BastionInstanceProfile
       ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
       InstanceMonitoring: true
-      InstanceType: t2.large
+      InstanceType: t3.large
       KeyName: !Ref KeyName
       SecurityGroups:
         - !Ref BastionSecurityGroup
@@ -151,4 +124,4 @@ Resources:
             - logs:PutLogEvents
             - logs:DescribeLogStreams
             Resource:
-            - arn:aws:logs:*:*:*
+            - arn:aws-us-gov:logs:*:*:*

@@ -1,7 +1,6 @@
----
 AWSTemplateFormatVersion: 2010-09-09
 
-Description: Stack to deploy a highly available, elastic, scalable Drupal environment. This master stack launches multiple nested stacks for different tiers. !! This can only be run in certain AWS Regions - 'us-east-1', 'us-east-2', 'us-west-2', 'eu-west-1'.
+Description: Stack to deploy a highly available, elastic, scalable Drupal environment. This master stack launches multiple nested stacks for different tiers. !! This can only be run in certain AWS Regions - 'us-gov-east-1', 'us-gov-west-1'.
 
 Metadata:
 
@@ -25,8 +24,6 @@ Metadata:
         default: Web Tier Parameters
       Parameters:
         - UseRoute53Boolean
-        - UseCloudFrontBoolean
-        - CloudFrontAcmCertificate
         - PublicAlbAcmCertificate
         - WebInstanceType
         - WebAsgMax
@@ -42,8 +39,6 @@ Metadata:
         - DomainName
         - Locale
     ParameterLabels:
-      CloudFrontAcmCertificate:
-        default: CloudFront Certificate ARN
       DatabaseInstanceType:
         default: DB Instance Class
       DatabaseMasterUsername:
@@ -62,8 +57,6 @@ Metadata:
         default: SSH Access From
       UseElastiCacheBoolean:
         default: Use a Cache Cluster?
-      UseCloudFrontBoolean:
-        default: Use a CDN (CloudFront)?
       UseRoute53Boolean:
         default: Create record set (Route53)?
       WebAsgMax:
@@ -89,24 +82,21 @@ Metadata:
 
 Parameters:
 
-  CloudFrontAcmCertificate:
-    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
-    Description: '[ Optional ] The AWS Certification Manager certificate ARN for the CloudFront distribution certificate - this certificate should be created in the us-east-1 (N. Virginia) region and must reference the Drupal domain name you use below.'
-    Type: String
   DatabaseInstanceType:
     AllowedValues:
       - db.t2.small
       - db.t2.medium
-      - db.r3.large
-      - db.r3.xlarge
-      - db.r3.2xlarge
-      - db.r3.4xlarge
-      - db.r3.8xlarge
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+      - db.t4g.medium
+      - db.t4g.large
     ConstraintDescription: Must be a valid RDS instance class.
     Default: db.t2.medium
     Description: The Amazon RDS database instance class.
     Type: String
   DatabaseMasterUsername:
+    Default: drupal
     AllowedPattern: ^([a-zA-Z0-9]*)$
     Description: The Amazon RDS master username.
     ConstraintDescription: Must contain only alphanumeric characters and be at least 8 characters.
@@ -122,6 +112,7 @@ Parameters:
     NoEcho: true
     Type: String
   DatabaseName:
+    Default: drupaldb
     AllowedPattern: ^([a-zA-Z0-9]*)$
     Description: The Amazon RDS master database name.
     Type: String
@@ -130,22 +121,11 @@ Parameters:
       - cache.t2.micro
       - cache.t2.small
       - cache.t2.medium
-      - cache.m4.large
-      - cache.m4.xlarge
-      - cache.m4.2xlarge
-      - cache.m4.4xlarge
-      - cache.m4.10xlarge
-      - cache.m3.medium
-      - cache.m3.large
-      - cache.m3.xlarge
-      - cache.m3.2xlarge
-      - cache.r3.large
-      - cache.r3.xlarge
-      - cache.r3.2xlarge
-      - cache.r3.4xlarge
-      - cache.r3.8xlarge
+      - cache.t3.micro
+      - cache.t3.small
+      - cache.t3.medium
     ConstraintDescription: Must be a valid Amazon ElastiCache node type.
-    Default: cache.t2.medium
+    Default: cache.t2.small
     Description: The Amazon ElastiCache cluster node type.
     Type: String
   KeyName:
@@ -154,7 +134,7 @@ Parameters:
     Description: Name of an EC2 KeyPair. Your bastion & Web instances will launch with this KeyPair.
     Type: AWS::EC2::KeyPair::KeyName
   PublicAlbAcmCertificate:
-    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
+    AllowedPattern: ^$|(arn:aws-us-gov:acm:)([a-z0-9/:-])*([a-z0-9])$
     Description: '[ Optional ] The AWS Certification Manager certificate ARN for the ALB certificate - this certificate should be created in the region you wish to run the ALB and must reference the Drupal domain name you use below.'
     Type: String
   SshAccessCidr:
@@ -162,13 +142,6 @@ Parameters:
     Description: The CIDR IP range that is permitted to SSH to bastion instance. Note - a value of 0.0.0.0/0 will allow access from ANY IP address.
     Type: String
     Default: 0.0.0.0/0
-  UseCloudFrontBoolean:
-    AllowedValues:
-      - True
-      - False
-    Default: True
-    Description: Specifies whether a CloudFront Distribution should be created to serve the Drupal website content.
-    Type: String
   UseElastiCacheBoolean:
     AllowedValues:
       - True
@@ -180,46 +153,36 @@ Parameters:
     AllowedValues:
       - True
       - False
-    Default: True
+    Default: False
     Description: Specifies whether a record set should be created in Route 53 for your Drupal domain name.
     Type: String
   WebAsgMax:
     AllowedPattern: ^((?!0$)[1-2]?[0-9]|30)$
     ConstraintDescription: Must be a number between 1 and 30.
-    Default: 4
+    Default: 6
     Description: Specifies the maximum number of EC2 instances in the Web Autoscaling Group.
     Type: String
   WebAsgMin:
     AllowedPattern: ^([0-0]?[0-9]|10)$
     ConstraintDescription: Must be a number between 0 and 10.
-    Default: 2
+    Default: 1
     Description: Specifies the minimum number of EC2 instances in the Web Autoscaling Group.
     Type: String
   WebInstanceType:
     AllowedValues:
-      - t2.micro
-      - t2.small
-      - t2.medium
-      - t2.large
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
       - m4.large
-      - m4.xlarge
-      - m4.2xlarge
-      - m4.4xlarge
-      - m4.10xlarge
-      - m3.medium
-      - m3.large
-      - m3.xlarge
-      - m3.2xlarge
-      - r3.large
-      - r3.xlarge
-      - r3.2xlarge
-      - r3.4xlarge
-      - r3.8xlarge
+      - t3.xlarge
+      - t3.2xlarge
     ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: t2.large
+    Default: t3.large
     Description: The Amazon EC2 instance type for your web instances.
     Type: String
   AdminEmail:
+    Default: mcanton@quotient-inc.com
     AllowedPattern: ^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$
     Description: The Drupal admin email address.
     Type: String
@@ -230,12 +193,14 @@ Parameters:
     Type: String
     NoEcho: true
   AdminUsername:
+    Default: admin
     AllowedPattern: ^([a-zA-Z0-9])([a-zA-Z0-9_-])*([a-zA-Z0-9])$
     Description: The Drupal admin username.
     Type: String
   Directory:
     AllowedPattern: ^([a-zA-Z0-9])([a-zA-Z0-9_-])*([a-zA-Z0-9])$
     Description: The Drupal site directory.
+    Default: nia-iadrp-coding-portal
     Type: String
   DomainName:
     AllowedPattern: ^$|(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$
@@ -244,9 +209,9 @@ Parameters:
   Locale:
     Description: "The main language of the Drupal site, as per https://codex.Drupal.org/Installing_Drupal_in_Your_Language. The default is 'en_GB'."
     Type: String
-    Default: en_GB
+    Default: en_US
   Title:
-    Default: This is a new Drupal site on Amazon Web Services
+    Default: This is a new Drupal site for nia-iadrp-coding-portal on Amazon Web Services
     AllowedPattern: ^([a-zA-Z0-9])([a-zA-Z0-9 _-]*)([a-zA-Z0-9])$
     Description: The Drupal website title.
     Type: String
@@ -255,18 +220,19 @@ Conditions:
 
   AvailableAWSRegion:
     !Or [
-      !Equals [ !Ref 'AWS::Region', ap-southeast-2 ],
-      !Equals [ !Ref 'AWS::Region', eu-west-1 ],
-      !Equals [ !Ref 'AWS::Region', us-east-1 ],
-      !Equals [ !Ref 'AWS::Region', us-east-2 ],
-      !Equals [ !Ref 'AWS::Region', us-west-2 ]
+      !Equals [ !Ref 'AWS::Region', us-gov-east-1 ],
+      !Equals [ !Ref 'AWS::Region', us-gov-west-1 ]
     ]
   CreateRecordSet:
     !Equals [ True, !Ref UseRoute53Boolean ]
-  DeployCloudFront:
-    !Equals [ True, !Ref UseCloudFrontBoolean ]
   DeployElastiCache:
     !Equals [ True, !Ref UseElastiCacheBoolean ]
+  ElasticacheCondition: !And
+    - !Condition AvailableAWSRegion
+    - !Condition DeployElastiCache
+  Route53Condition: !And
+    - !Condition AvailableAWSRegion
+    - !Condition CreateRecordSet
 
 Resources:
 
@@ -286,21 +252,7 @@ Resources:
           !GetAtt [ newvpc, Outputs.PublicSubnet1 ]
         PublicSubnet2:
           !GetAtt [ newvpc, Outputs.PublicSubnet2 ]
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-03-bastion.yaml
-  cloudfront:
-    Condition: AvailableAWSRegion
-    Condition: DeployCloudFront
-    DependsOn: [ publicalb, web ]
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      Parameters:
-        CloudFrontAcmCertificate:
-          !Ref CloudFrontAcmCertificate
-        PublicAlbDnsName:
-          !GetAtt [ publicalb, Outputs.PublicAlbDnsName ]
-        DomainName:
-          !Ref DomainName
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-04-cloudfront.yaml
+      TemplateURL: https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/templates/aws-refarch-drupal-03-bastion.yaml
   efs:
     Condition: AvailableAWSRegion
     DependsOn: [ newvpc, securitygroups ]
@@ -315,10 +267,9 @@ Resources:
           !GetAtt [ newvpc, Outputs.DataSubnet1 ]
         DataSubnet2:
           !GetAtt [ newvpc, Outputs.DataSubnet2 ]
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-03-efs.yaml
+      TemplateURL: https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/templates/aws-refarch-drupal-03-efs.yaml
   elasticache:
-    Condition: AvailableAWSRegion
-    Condition: DeployElastiCache
+    Condition: ElasticacheCondition
     DependsOn: [ newvpc, securitygroups ]
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -335,11 +286,11 @@ Resources:
           !Ref ElastiCacheNodeType
         ElastiCacheSecurityGroup:
           !GetAtt [ securitygroups, Outputs.ElastiCacheSecurityGroup ]
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-03-elasticache.yaml
+      TemplateURL: https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/templates/aws-refarch-drupal-03-elasticache.yaml
   newvpc:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-01-newvpc.yaml
+      TemplateURL: https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/templates/aws-refarch-drupal-01-newvpc.yaml
   publicalb:
     Condition: AvailableAWSRegion
     DependsOn: [ newvpc, securitygroups ]
@@ -358,7 +309,7 @@ Resources:
           !GetAtt [ securitygroups, Outputs.PublicAlbSecurityGroup ]
         Vpc:
           !GetAtt [ newvpc, Outputs.Vpc ]
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-03-publicalb.yaml
+      TemplateURL: https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/templates/aws-refarch-drupal-03-publicalb.yaml
   rds:
     Condition: AvailableAWSRegion
     DependsOn: [ newvpc, securitygroups ]
@@ -381,21 +332,20 @@ Resources:
           !GetAtt [ newvpc, Outputs.DataSubnet1 ]
         DataSubnet2:
           !GetAtt [ newvpc, Outputs.DataSubnet2 ]
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-03-rds.yaml
+      TemplateURL: https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/templates/aws-refarch-drupal-03-rds.yaml
   route53:
-    Condition: AvailableAWSRegion
-    Condition: CreateRecordSet
+    Condition: Route53Condition
     DependsOn: [ publicalb, web ]
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
         DnsEndpoint:
-          !If [ DeployCloudFront, !GetAtt [ cloudfront, Outputs.DnsEndpoint ], !GetAtt [ publicalb, Outputs.PublicAlbDnsName ] ]
+          !GetAtt [ publicalb, Outputs.PublicAlbDnsName ]
         DnsHostId:
-          !If [ DeployCloudFront, 'Z2FDTNDATAQYW2', !GetAtt [ publicalb, Outputs.PublicAlbCanonicalHostedZoneId ] ]
+          !GetAtt [ publicalb, Outputs.PublicAlbCanonicalHostedZoneId ]
         DomainName:
           !Ref DomainName
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-05-route53.yaml
+      TemplateURL: https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/templates/aws-refarch-drupal-05-route53.yaml
   securitygroups:
     Condition: AvailableAWSRegion
     DependsOn: newvpc
@@ -406,7 +356,7 @@ Resources:
           !Ref SshAccessCidr
         Vpc:
           !GetAtt [ newvpc, Outputs.Vpc ]
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-02-securitygroups.yaml
+      TemplateURL: https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/templates/aws-refarch-drupal-02-securitygroups.yaml
   web:
     Condition: AvailableAWSRegion
     DependsOn: [ efs, newvpc, publicalb, securitygroups ]
@@ -459,18 +409,18 @@ Resources:
           !Ref Locale
         Title:
           !Ref Title
-      TemplateURL: https://s3.amazonaws.com/aws-refarch/drupal/latest/templates/aws-refarch-drupal-04-web.yaml
+      TemplateURL: https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/templates/aws-refarch-drupal-04-web.yaml
 
 Outputs:
 
   StackStatus:
     Description: Master Stack Status
-    Value: !If [ AvailableAWSRegion, !Join [ '', [ 'Stack created in an available region: ', !Ref 'AWS::Region' ] ], "!!ERROR!!! - Nothing to do! - unavailable AWS Region. You must create this stack in an available AWS Region: 'us-east-1', 'us-east-2', 'us-west-2', 'eu-west-1', 'ap-southeast-2'." ]
+    Value: !If [ AvailableAWSRegion, !Join [ '', [ 'Stack created in an available region: ', !Ref 'AWS::Region' ] ], "!!ERROR!!! - Nothing to do! - unavailable AWS Region. You must create this stack in an available AWS Region: 'us-gov-east-1', 'us-gov-west-1'." ]
   SiteUrl:
     Description: The URL of the Drupal site
-    Value: !Join [ '', [ !If [ CreateRecordSet, !Join [ '', [ 'http://www.', !Ref DomainName ] ], !If [ DeployCloudFront, !GetAtt [ cloudfront, Outputs.DnsHostname ], !GetAtt [ publicalb, Outputs.PublicAlbHostname ] ] ], '/drupal' ] ]
+    Value: !Join [ '', [ !If [ CreateRecordSet, !Join [ '', [ 'http://', !Ref DomainName ] ], !GetAtt [ publicalb, Outputs.PublicAlbHostname ] ], '/' ] ]
   OpCacheValidationUrl:
     Description: A page to validate OpCache has been enabled for each instance in the ASG. Refresh the page to see the status of each instance in the ASG.
-    Value: !Join [ '', [ !If [ CreateRecordSet, !Join [ '', [ 'http://www.', !Ref DomainName ] ], !If [ DeployCloudFront, !GetAtt [ cloudfront, Outputs.DnsHostname ], !GetAtt [ publicalb, Outputs.PublicAlbHostname ] ] ], '/opcache-instanceid.php' ] ]
+    Value: !Join [ '', [ !If [ CreateRecordSet, !Join [ '', [ 'http://', !Ref DomainName ] ], !GetAtt [ publicalb, Outputs.PublicAlbHostname ] ], '/opcache-instanceid.php' ] ]
 
     

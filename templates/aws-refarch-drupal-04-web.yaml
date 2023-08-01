@@ -115,7 +115,7 @@ Parameters:
     Description: The Amazon RDS master database name.
     Type: String
   ElasticFileSystem:
-    AllowedPattern: ^(fs-)([a-z0-9]{8})$
+    AllowedPattern: ^(fs-)([a-z0-9]{17})$
     Description: The Amazon EFS file system id.
     Type: String
   KeyName:
@@ -151,26 +151,14 @@ Parameters:
     Type: String
   WebInstanceType:
     AllowedValues:
-      - t2.micro
-      - t2.small
-      - t2.medium
-      - t2.large
+      - t3.small
+      - t3.medium
+      - t3.large
       - m4.large
-      - m4.xlarge
-      - m4.2xlarge
-      - m4.4xlarge
-      - m4.10xlarge
-      - m3.medium
-      - m3.large
-      - m3.xlarge
-      - m3.2xlarge
-      - r3.large
-      - r3.xlarge
-      - r3.2xlarge
-      - r3.4xlarge
-      - r3.8xlarge
+      - t3.xlarge
+      - t3.2xlarge
     ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: t2.large
+    Default: t3.large
     Description: The Amazon EC2 instance type for your web instances.
     Type: String
   WebSecurityGroup:
@@ -210,7 +198,7 @@ Parameters:
   Locale:
     Description: The main language of the Drupal site, as per https://codex.Drupal.org/Installing_Drupal_in_Your_Language. The default is 'en_GB'.
     Type: String
-    Default: en_GB
+    Default: en_US
   Title:
     AllowedPattern: ^([a-zA-Z0-9])([a-zA-Z0-9 _-]*)([a-zA-Z0-9])$
     Description: The Drupal website title.
@@ -222,13 +210,8 @@ Conditions:
     !Equals [ False, !Ref SslCertificate ]
   MoreThan2AZ:
     !Or [
-      !Equals [ !Ref 'AWS::Region', us-east-1 ],
-      !Equals [ !Ref 'AWS::Region', us-east-2 ],
-      !Equals [ !Ref 'AWS::Region', us-west-2 ],
-      !Equals [ !Ref 'AWS::Region', eu-west-1 ],
-      !Equals [ !Ref 'AWS::Region', sa-east-1 ],
-      !Equals [ !Ref 'AWS::Region', ap-northeast-1 ],
-      !Equals [ !Ref 'AWS::Region', ap-southeast-2 ]
+      !Equals [ !Ref 'AWS::Region', us-gov-east-1 ],
+      !Equals [ !Ref 'AWS::Region', us-gov-west-1 ]
     ]
   NoDomainName:
     !Equals [ '', !Ref DomainName ]
@@ -236,34 +219,12 @@ Conditions:
 Mappings:
 
   RegionMap:
-    ap-northeast-1:
-      AMI: ami-3bd3c45c
-    ap-northeast-2:
-      AMI: ami-e21cc38c
-    ap-south-1:
-      AMI: ami-47205e28
-    ap-southeast-1:
-      AMI: ami-77af2014
-    ap-southeast-2:
-      AMI: ami-10918173
-    ca-central-1:
-      AMI: ami-a7aa15c3
-    eu-central-1:
-      AMI: ami-82be18ed
-    eu-west-1:
-      AMI: ami-d7b9a2b1
-    eu-west-2:
-      AMI: ami-ed100689
-    sa-east-1:
-      AMI: ami-87dab1eb
-    us-east-1:
-      AMI: ami-a4c7edb2
-    us-east-2:
-      AMI: ami-8a7859ef
-    us-west-1:
-      AMI: ami-327f5352
-    us-west-2:
-      AMI: ami-6df1e514
+    us-gov-west-1:
+      AMI: ami-0c7e9eda70bb1f75c
+#      CIS_STIG_RHEL9_AMI: ami-026382c84eef5afdf
+    us-gov-east-1:
+      AMI: ami-0cf1e2e4032ecd87c
+#      CIS_STIG_RHEL9_AMI: ami-00f2d27cdd4bf678b
 
 Resources:
 
@@ -298,7 +259,7 @@ Resources:
             - logs:PutLogEvents
             - logs:DescribeLogStreams
             Resource:
-            - arn:aws:logs:*:*:*
+            - arn:aws-us-gov:logs:*:*:*
   WebAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -330,41 +291,59 @@ Resources:
       AWS::CloudFormation::Init:
         configSets:
           deploy_webserver:
+            - install_remi_repo
             - install_webserver
             - build_cacheclient
             - build_drupal
             - build_opcache
             - install_cacheclient
+            - install_composer
             - install_drupal
             - install_opcache
             - start_webserver
+        install_remi_repo:
+          files:
+            /tmp/install_remi_repo.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+                  subscription-manager repos --enable codeready-builder-for-rhel-9-$(arch)-rpms
+                  dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+                  dnf install -y https://rpms.remirepo.net/enterprise/remi-release-9.rpm
+                  dnf -y module enable php:remi-8.1
+              mode: 000500
+              owner: root
+              group: root
+          commands:
+            install_remi_repo:
+              command: ./install_remi_repo.sh
+              cwd: /tmp
+              ignoreErrors: false
         install_webserver:
           packages:
             yum:
-              awslogs: []
-              httpd24: []
-              mysql56: []
-              php70: []
-              php70-mysqlnd: []
-              php70-gd: []
+              httpd: []
+              mysql: []
+              php: []
+              php-mysqlnd: []
+              php-gd: []
           files:
             /tmp/create_site_conf.sh:
               content:
-                !Join [
-                  "",[
-                    "#!/bin/bash -xe\n",
-                    "if [ ! -f /etc/httpd/conf.d/", !Ref Directory, ".conf ]; then\n",                    
-                    "   touch /etc/httpd/conf.d/", !Ref Directory, ".conf\n",
-                    "   echo 'ServerName 127.0.0.1:80' >> /etc/httpd/conf.d/", !Ref Directory, ".conf\n",
-                    "   echo 'DocumentRoot /var/www/drupal/", !Ref Directory, "' >> /etc/httpd/conf.d/", !Ref Directory, ".conf\n",
-                    "   echo '<Directory /var/www/drupal/", !Ref Directory, ">' >> /etc/httpd/conf.d/", !Ref Directory, ".conf\n",
-                    "   echo '  Options Indexes FollowSymLinks' >> /etc/httpd/conf.d/", !Ref Directory, ".conf\n",
-                    "   echo '  AllowOverride All' >> /etc/httpd/conf.d/", !Ref Directory, ".conf\n",
-                    "   echo '  Require all granted' >> /etc/httpd/conf.d/", !Ref Directory, ".conf\n",
-                    "   echo '</Directory>' >> /etc/httpd/conf.d/", !Ref Directory, ".conf\n",
-                    "fi\n"
-                  ]
-                ]
+                !Sub |
+                  #!/bin/bash -xe
+                  if [ ! -f /etc/httpd/conf.d/nia-iadrp-coding-portal.conf ]; then
+                    touch /etc/httpd/conf.d/nia-iadrp-coding-portal.conf
+                    {
+                      echo 'ServerName 127.0.0.1:80'
+                      echo 'DocumentRoot /var/www/drupal/nia-iadrp-coding-portal/web'
+                      echo '<Directory /var/www/drupal/nia-iadrp-coding-portal/web>'
+                      echo '  Options Indexes FollowSymLinks'
+                      echo '  AllowOverride All'
+                      echo '  Require all granted'
+                      echo '</Directory>'
+                    } >> /etc/httpd/conf.d/nia-iadrp-coding-portal.conf
+                  fi
               mode: 000500
               owner: root
               group: root
@@ -376,79 +355,138 @@ Resources:
         build_cacheclient:
           packages:
             yum:
-              gcc-c++: []  
+              gcc-c++: []
+              zlib-devel: []
           files:
             /tmp/install_cacheclient.sh:
               content:
                 !Sub |
                   #!/bin/bash -xe
-                  aws s3 cp 's3://aws-refarch/drupal/latest/bits/AmazonElastiCacheClusterClient-2.0.1-PHP70-64bit.tar.gz' /tmp/.
-                  tar -xf '/tmp/AmazonElastiCacheClusterClient-2.0.1-PHP70-64bit.tar.gz'
-                  cp '/tmp/artifact/amazon-elasticache-cluster-client.so' /usr/lib64/php/7.0/modules/
-                  if [ ! -f /etc/php-7.0.d/50-memcached.ini ]; then
-                      touch /etc/php-7.0.d/50-memcached.ini
+                  aws s3 cp 's3://aws-refarch-drupal/bits/AmazonElastiCacheClusterClient-PHP81-64bit-libmemcached-1.0.19-openssl1.1.tar.gz' /tmp/. --region ${AWS::Region}
+                  tar -xf '/tmp/AmazonElastiCacheClusterClient-PHP81-64bit-libmemcached-1.0.19-openssl1.1.tar.gz'
+                  cp '/tmp/amazon-elasticache-cluster-client.so' /usr/lib64/php/modules/
+                  if [ ! -f /etc/php.d/50-memcached.ini ]; then
+                      touch /etc/php.d/50-memcached.ini
                   fi
-                  sed -i '3i extension=/usr/lib64/php/7.0/modules/amazon-elasticache-cluster-client.so;' /etc/php-7.0.d/50-memcached.ini
-                  sed -i '3i extension=igbinary.so;' /etc/php-7.0.d/50-memcached.ini
+                  sed -i 'extension=/usr/lib64/php/modules/amazon-elasticache-cluster-client.so;' /etc/php.d/50-memcached.ini
+                  sed -i 'extension=igbinary.so;' /etc/php.d/50-memcached.ini
               mode: 000500
               owner: root
               group: root
         build_opcache:
           packages:
             yum:
-              php70-opcache: []
+              php-opcache: []
           files:
             /tmp/install_opcache.sh:
               content:
                 !Sub |
                   #!/bin/bash -xe
+                
                   # create hidden opcache directory locally & change owner to apache
                   if [ ! -d /var/www/.opcache ]; then                    
                       mkdir -p /var/www/.opcache
                   fi
-                  # enable opcache in /etc/php-7.0.d/10-opcache.ini
-                  sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php-7.0.d/10-opcache.ini
-                  sed -i 's/opcache.memory_consumption=.*/opcache.memory_consumption=512/' /etc/php-7.0.d/10-opcache.ini
-                  # download opcache-instance.php to verify opcache status
-                  if [ ! -f /var/www/drupal/${Directory}/opcache-instanceid.php ]; then
-                      aws s3 cp 's3://aws-refarch/drupal/latest/bits/opcache-instanceid.php' /var/www/drupal/${Directory}/.
+                
+                  # enable opcache in /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php.d/10-opcache.ini
+                  sed -i 's/opcache.memory_consumption=.*/opcache.memory_consumption=512/' /etc/php.d/10-opcache.ini
+                
+                  # download opcache-instanceid.php to verify opcache status
+                  if [ ! -f /var/www/drupal/nia-iadrp-coding-portal/web/opcache-instanceid.php ]; then
+                      aws s3 cp 's3://aws-refarch-drupal/bits/opcache-instanceid.php' /var/www/drupal/nia-iadrp-coding-portal/web/. --region ${AWS::Region}
                   fi
               mode: 000500
               owner: root
               group: root
         build_drupal:
+          packages:
+            yum:
+              wget: [ ]
           files:
             /tmp/install_drupal.sh:
               content:
-                !Join [
-                  "",[
-                    "#!/bin/bash -xe\n",
-                    "\n",
-                    "# make site directory\n",
-                    "if [ ! -d /var/www/drupal/", !Ref Directory, " ]; then\n",                    
-                    "   mkdir -p /var/www/drupal/", !Ref Directory, "\n",
-                    "\n",
-                    "   cd /tmp\n",
-                    "   wget http://ftp.drupal.org/files/projects/drupal-8.3.5.tar.gz\n",
-                    "   cd /var/www/drupal/", !Ref Directory, "\n",
-                    "   tar --strip-components=1 -xvzf /tmp/drupal-8.3.5.tar.gz\n",
-                    "   # set permissions of drupal site directories\n", 
-                    "   chown -R apache:apache /var/www/drupal/", !Ref Directory, "\n",
-                    "   if [ ! -f /var/www/drupal/", !Ref Directory, "/opcache-instanceid.php ]; then\n",
-                    "     aws s3 cp 's3://aws-refarch/wordpress/latest/bits/opcache-instanceid.php' /var/www/drupal/", !Ref Directory, "/.\n",
-                    "   fi\n",
-                    "fi\n"
-                  ]
-                ]
+                !Sub |
+                  #!/bin/bash -xe
+                  
+                  # make site directory
+                  if [ ! -d /var/www/drupal/nia-iadrp-coding-portal ]; then
+                    mkdir -p /var/www/drupal/ && cd /var/www/drupal
+                   
+                    git clone https://github.com/quotientinc/nia-iadrp-coding-portal.git
+                    cd /var/www/drupal/nia-iadrp-coding-portal
+            
+                    HOME=~/ /usr/local/bin/composer install
+                
+                    # create settings.php and set db and hash_salt 
+                    if [ ! -f /var/www/drupal/nia-iadrp-coding-portal/web/sites/default/settings.php ]; then
+                      cp ./web/sites/default/default.settings.php ./web/sites/default/settings.php
+                
+                      {
+                        echo "\$databases['default']['default'] = array ("
+                        echo "  'database' => '${DatabaseName}',"
+                        echo "  'username' => '${DatabaseMasterUsername}',"
+                        echo "  'password' => '${DatabaseMasterPassword}',"
+                        echo "  'prefix' => '',"
+                        echo "  'host' => '${DatabaseClusterEndpointAddress}',"
+                        echo "  'port' => '3306',"
+                        echo "  'isolation_level' => 'READ COMMITTED',"
+                        echo "  'namespace' => 'Drupal\\mysql\\Driver\\Database\\mysql',"
+                        echo "  'driver' => 'mysql',"
+                        echo "  'autoload' => 'core/modules/mysql/src/Driver/Database/mysql/',"
+                        echo "  );"
+                      } >> ./web/sites/default/settings.php
+                
+                      HASH_SALT=$(HOME=~/ ./vendor/bin/drush eval "print_r(Drupal\Component\Utility\Crypt::randomBytesBase64(55))")
+                      echo "Hash Salt: ${!HASH_SALT}"
+                      sed -i "s/^\$settings\['hash_salt'\].*$/\$settings\['hash_salt'\] = '${!HASH_SALT}';/" ./web/sites/default/settings.php
+                    fi
+                
+                    if [ ! -f /var/www/drupal/nia-iadrp-coding-portal/web/opcache-instanceid.php ]; then
+                     aws s3 cp 's3://aws-refarch-drupal/bits/opcache-instanceid.php' ./web/. --region ${AWS::Region}
+                    fi
+                
+                    # pull latest db dump and restore it using drush
+                    if [ ! -f /var/www/drupal/nia-iadrp-coding-portal/coding-portal_7-25.sql.gz ]; then
+                      aws s3 cp 's3://aws-refarch-drupal/drupaldb/coding-portal_7-25.sql.gz' . --region ${AWS::Region}
+                      gzip -d coding-portal_7-25.sql.gz
+                      mkdir database
+                      mv coding-portal_7-25.sql database/database.sql
+                      tar -zcvf coding-portal_7-25.tar.gz database
+                      cd /var/www/drupal/nia-iadrp-coding-portal/web
+                      HOME=~/ /var/www/drupal/nia-iadrp-coding-portal/vendor/bin/drush archive:restore /var/www/drupal/nia-iadrp-coding-portal/coding-portal_7-25.tar.gz --db -vvv -y
+                    fi
+                
+                    # set permissions of drupal site directories
+                    chown -R apache:apache /var/www/drupal/nia-iadrp-coding-portal/web
+                    chmod 444 /var/www/drupal/nia-iadrp-coding-portal/web/sites/default/settings.php
+                
+                  fi
               mode: 000500
               owner: root
               group: root
+        install_composer:
+          files:
+            /tmp/install_composer.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+                  curl -sS https://getcomposer.org/installer -o composer-setup.php
+                  HOME=~/ php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+              mode: 000500
+              owner: root
+              group: root
+          commands:
+            install_composer:
+              command: ./install_composer.sh
+              cwd: /tmp
+              ignoreErrors: false
         install_drupal:
           commands:
             install_drupal:
               command: ./install_drupal.sh
               cwd: /tmp
-              ignoreErrors: false          
+              ignoreErrors: false
         install_cacheclient:
           commands:
             install_cacheclient:
@@ -469,7 +507,7 @@ Resources:
                 ensureRunning: true
           commands:
             start_webserver:
-              command: service httpd restart
+              command: systemctl restart httpd
               ignoreErrors: false
     Properties:
       IamInstanceProfile: !Ref WebInstanceProfile
@@ -483,13 +521,42 @@ Resources:
         "Fn::Base64":
           !Sub |
             #!/bin/bash -xe
-            yum update -y
+            dnf update -y
+            
+            # Install and configure CloudWatch Logs
+            dnf install -y https://s3.amazonaws.com/amazoncloudwatch-agent/redhat/amd64/latest/amazon-cloudwatch-agent.rpm
+            systemctl enable amazon-cloudwatch-agent
+            systemctl start amazon-cloudwatch-agent
+            
+            # Installing the Amazon EFS client
+            dnf -y install git rpm-build make
+            git clone https://github.com/aws/efs-utils
+            cd efs-utils
+            make rpm
+            dnf -y install build/amazon-efs-utils*rpm
+            
+            # Mount AWS EFS
             mkdir -p /var/www/drupal
             mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ${ElasticFileSystem}.efs.${AWS::Region}.amazonaws.com:/ /var/www/drupal
-            /opt/aws/bin/cfn-init --configsets deploy_webserver --verbose --stack ${AWS::StackName} --resource WebLaunchConfiguration --region ${AWS::Region}
-            sleep 600
-            /opt/aws/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource WebAutoScalingGroup --region ${AWS::Region}
-            service httpd restart
+            
+            # Allow the Apache HTTP server service (httpd) to access and share NFS volumes
+            setsebool -P httpd_use_nfs on
+          
+            # Allow Apache HTTP Server scripts and modules to connect to database servers.
+            setsebool -P httpd_can_network_connect_db on
+          
+            # Install pip
+            dnf -y install python3-pip
+            
+            # Install AWS CLI and CFN Bootstrap
+            pip3 install awscli
+            pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
+            
+            /usr/local/bin/cfn-init --configsets deploy_webserver --verbose --stack ${AWS::StackName} --resource WebLaunchConfiguration --region ${AWS::Region}
+            sleep 60
+            /usr/local/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource WebAutoScalingGroup --region ${AWS::Region}
+            systemctl restart httpd
+            
 
 Outputs:
 
