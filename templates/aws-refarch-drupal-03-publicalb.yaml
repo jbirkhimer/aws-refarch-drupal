@@ -31,7 +31,8 @@ Metadata:
         default: Public Subnet for AZ 2
 
 Parameters:
-
+  ParamStackName:
+    Type: String
   PublicAlbAcmCertificate:
     AllowedPattern: ^$|(arn:aws-us-gov:acm:)([a-z0-9/:-])*([a-z0-9])$
     Description: '[ Optional ] The AWS Certification Manager certificate ARN for the ALB certificate - this certificate should be created in the region you wish to run the ALB and must reference the Drupal domain name you use below.'
@@ -111,7 +112,7 @@ Resources:
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /
       HealthCheckTimeoutSeconds: 5
-      Name: 'DrupalPublicAlb'
+      Name: !Join [ '-', [ 'publicalb', !Ref ParamStackName ] ]
       Port: 80
       Protocol: HTTP
       Tags:

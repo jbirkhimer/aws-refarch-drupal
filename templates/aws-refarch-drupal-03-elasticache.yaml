@@ -31,7 +31,8 @@ Metadata:
         default: ElastiCache Security Group
 
 Parameters:
-
+  ParamStackName:
+    Type: String
   DataSubnet0:
     Description: Select an existing database subnet for AZ 0.
     Type: AWS::EC2::Subnet::Id
@@ -77,7 +78,7 @@ Resources:
       AZMode: cross-az
       CacheNodeType: !Ref ElastiCacheNodeType
       CacheSubnetGroupName: !Ref ElastiCacheSubnetGroup
-      ClusterName: !Ref ElastiCacheClusterName
+      ClusterName: !Join [ '-', [ !Ref ElastiCacheClusterName, !Ref ParamStackName ] ]
       Engine: memcached
       NumCacheNodes:
         !If [
@@ -99,7 +100,7 @@ Resources:
   ElastiCacheSubnetGroup: 
     Type: AWS::ElastiCache::SubnetGroup
     Properties: 
-      CacheSubnetGroupName: !Join [ '', [ !Ref ElastiCacheClusterName, SubnetGroup ] ]
+      CacheSubnetGroupName: !Join [ '-', [ !Ref ElastiCacheClusterName, SubnetGroup, !Ref ParamStackName ] ]
       Description: ElastiCache Subnet Group for Drupal
       SubnetIds: 
         !If [
