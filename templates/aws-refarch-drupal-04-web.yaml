@@ -245,7 +245,7 @@ Resources:
             Service:
             - ec2.amazonaws.com
           Action:
-          - sts:AssumeRole
+            - sts:AssumeRole
       Path: /
       Policies:
       - PolicyName: logs
@@ -362,7 +362,12 @@ Resources:
               content:
                 !Sub |
                   #!/bin/bash -xe
-                  aws s3 cp 's3://aws-refarch-drupal/bits/AmazonElastiCacheClusterClient-PHP81-64bit-libmemcached-1.0.19-openssl1.1.tar.gz' /tmp/. --region ${AWS::Region}
+                
+                  # Issues with aws cli copying s3 objects 403 error. Using --no-sign-request seems to work
+                  #aws s3 cp 's3://aws-refarch-drupal/bits/AmazonElastiCacheClusterClient-PHP81-64bit-libmemcached-1.0.19-openssl1.1.tar.gz' /tmp/. --region ${AWS::Region}
+                  #aws s3 cp 's3://aws-refarch-drupal/bits/AmazonElastiCacheClusterClient-PHP81-64bit-libmemcached-1.0.19-openssl1.1.tar.gz' /tmp/. --region ${AWS::Region} --no-sign-request
+                  wget https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/bits/AmazonElastiCacheClusterClient-PHP81-64bit-libmemcached-1.0.19-openssl1.1.tar.gz -P /tmp/
+                
                   tar -xf '/tmp/AmazonElastiCacheClusterClient-PHP81-64bit-libmemcached-1.0.19-openssl1.1.tar.gz'
                   cp '/tmp/amazon-elasticache-cluster-client.so' /usr/lib64/php/modules/
                   if [ ! -f /etc/php.d/50-memcached.ini ]; then
@@ -394,7 +399,12 @@ Resources:
                 
                   # download opcache-instanceid.php to verify opcache status
                   if [ ! -f /var/www/drupal/nia-iadrp-coding-portal/web/opcache-instanceid.php ]; then
-                      aws s3 cp 's3://aws-refarch-drupal/bits/opcache-instanceid.php' /var/www/drupal/nia-iadrp-coding-portal/web/. --region ${AWS::Region}
+                
+                    # Issues with aws cli copying s3 objects 403 error. Using --no-sign-request seems to work
+                    #aws s3 cp 's3://aws-refarch-drupal/bits/opcache-instanceid.php' /var/www/drupal/nia-iadrp-coding-portal/web/. --region ${AWS::Region}
+                    #aws s3 cp 's3://aws-refarch-drupal/bits/opcache-instanceid.php' /var/www/drupal/nia-iadrp-coding-portal/web/. --region ${AWS::Region} --no-sign-request
+                
+                    wget https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/bits/opcache-instanceid.php -P /var/www/drupal/nia-iadrp-coding-portal/web/
                   fi
               mode: 000500
               owner: root
@@ -416,6 +426,9 @@ Resources:
                     git clone https://github.com/quotientinc/nia-iadrp-coding-portal.git
                     cd /var/www/drupal/nia-iadrp-coding-portal
             
+                    # sometimes see timeout error 'Install of drupal/core failed The following exception is caused by a process timeout'
+                    HOME=~/ /usr/local/bin/composer config --global process-timeout 2000
+                
                     HOME=~/ /usr/local/bin/composer install
                 
                     # create settings.php and set db and hash_salt 
@@ -443,12 +456,23 @@ Resources:
                     fi
                 
                     if [ ! -f /var/www/drupal/nia-iadrp-coding-portal/web/opcache-instanceid.php ]; then
-                     aws s3 cp 's3://aws-refarch-drupal/bits/opcache-instanceid.php' ./web/. --region ${AWS::Region}
+                
+                      # Issues with aws cli copying s3 objects 403 error. Using --no-sign-request seems to work
+                      #aws s3 cp 's3://aws-refarch-drupal/bits/opcache-instanceid.php' ./web/. --region ${AWS::Region}
+                      #aws s3 cp 's3://aws-refarch-drupal/bits/opcache-instanceid.php' ./web/. --region ${AWS::Region} --no-sign-request
+                
+                      wget https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/bits/opcache-instanceid.php -P ./web/
                     fi
                 
                     # pull latest db dump and restore it using drush
                     if [ ! -f /var/www/drupal/nia-iadrp-coding-portal/coding-portal_7-25.sql.gz ]; then
-                      aws s3 cp 's3://aws-refarch-drupal/drupaldb/coding-portal_7-25.sql.gz' . --region ${AWS::Region}
+                
+                      # Issues with aws cli copying s3 objects 403 error. Using --no-sign-request seems to work
+                      #aws s3 cp 's3://aws-refarch-drupal/drupaldb/coding-portal_7-25.sql.gz' . --region ${AWS::Region}
+                      #aws s3 cp 's3://aws-refarch-drupal/drupaldb/coding-portal_7-25.sql.gz' . --region ${AWS::Region}  --no-sign-request
+                
+                      wget https://aws-refarch-drupal.s3-us-gov-west-1.amazonaws.com/drupaldb/coding-portal_7-25.sql.gz -P ./
+                
                       gzip -d coding-portal_7-25.sql.gz
                       mkdir database
                       mv coding-portal_7-25.sql database/database.sql
@@ -484,7 +508,7 @@ Resources:
         install_drupal:
           commands:
             install_drupal:
-              command: ./install_drupal.sh
+              command: ./install_drupal.sh 2>&1 | tee /var/log/drupal_install.log
               cwd: /tmp
               ignoreErrors: false
         install_cacheclient:
